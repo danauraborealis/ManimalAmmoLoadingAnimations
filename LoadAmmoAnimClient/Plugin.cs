@@ -33,10 +33,10 @@ namespace Manimal.LoadAmmoAnim
             LogSource = Logger;
             LogSource.LogInfo("LoadAmmoAnim loaded!");
 
-            // Class1204 hooks — detect mag-loading sessions + extend the first-bullet
+            // LoadMagazineProcess hooks — detect mag-loading sessions + extend the first-bullet
             // delay to fit the bundle's draw clip. driver-side, unrelated to controller dispatch.
             new LoadAmmoAnimDetectPatch().Enable();
-            new Class1204DrawDelayPatch().Enable();
+            new LoadMagazineProcessDrawDelayPatch().Enable();
             new RaidStartBundleWarmPatch().Enable();
 
             // dispatch patches. route LoadAmmoBundleItem through LoadAmmoBundleController

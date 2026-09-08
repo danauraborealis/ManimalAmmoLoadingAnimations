@@ -19,7 +19,7 @@ namespace Manimal.LoadAmmoAnim.Patches
                 BindingFlags.Public | BindingFlags.Instance);
 
         [PatchPrefix]
-        private static bool Prefix(Player __instance, Item item, Callback<GInterface202> callback)
+        private static bool Prefix(Player __instance, Item item, Callback<IUsableItemController> callback)
         {
             if (item is LoadAmmoBundleItem)
             {

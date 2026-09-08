@@ -36,7 +36,7 @@ namespace Manimal.LoadAmmoAnim.Patches
     {
         protected override MethodBase GetTargetMethod() =>
             AccessTools.Method(typeof(Player), "SetEmptyHands",
-                new[] { typeof(Callback<GInterface198>) });
+                new[] { typeof(Callback<IEmptyHandsController>) });
 
         [PatchPrefix]
         public static bool Prefix(Player __instance)

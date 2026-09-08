@@ -14,15 +14,15 @@ namespace Manimal.LoadAmmoAnim.CustomEFTData
 
         // state names in the bundle's animator graph.
         private const string PutAwayStateName = "USE TO OUT S";
-        private const string DrawStateName    = "OUT TO USE S";
+        private const string DrawStateName = "OUT TO USE S";
 
         public Animator BundleAnimator { get; private set; }
 
-        public override void vmethod_0(Player player, WeaponPrefab weaponPrefab)
+        public override void InitializeController(Player player, WeaponPrefab weaponPrefab)
         {
             try
             {
-                base.vmethod_0(player, weaponPrefab);
+                base.InitializeController(player, weaponPrefab);
 
                 if (weaponPrefab == null) return;
                 BundleAnimator = weaponPrefab.GetComponentInChildren<Animator>();

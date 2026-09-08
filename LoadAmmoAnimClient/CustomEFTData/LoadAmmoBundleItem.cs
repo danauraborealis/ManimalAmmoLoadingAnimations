@@ -9,9 +9,9 @@ namespace Manimal.LoadAmmoAnim.CustomEFTData
     //
     // cloned from PortableRangeFinder server-side so the engine treats it as a
     // usable info-item.
-    [CustomParent(BuildInfo.BundleItemParentId, typeof(LoadAmmoBundleItem), typeof(PortableRangeFinderTemplateClass))]
-    public sealed class LoadAmmoBundleItem : PortableRangeFinderItemClass
+    [CustomParent(BuildInfo.BundleItemParentId, typeof(LoadAmmoBundleItem), typeof(PortableRangeFinderTemplate))]
+    public sealed class LoadAmmoBundleItem : PortableRangeFinder
     {
-        public LoadAmmoBundleItem(string id, PortableRangeFinderTemplateClass template) : base(id, template) { }
+        public LoadAmmoBundleItem(string id, PortableRangeFinderTemplate template) : base(id, template) { }
     }
 }

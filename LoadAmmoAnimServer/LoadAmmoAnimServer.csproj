@@ -1,104 +1,112 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <OutputType>Library</OutputType>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <RootNamespace>LoadAmmoAnimMod</RootNamespace>
-    <AssemblyName>LoadAmmoAnimServer</AssemblyName>
-    <Version>$(ModVersion)</Version>
-    <Authors>Manimal</Authors>
-    <Company>Manimal</Company>
-    <Product>LoadAmmoAnim</Product>
-    <Description>Server-side mod that registers the hidden animation IFAK item for LoadAmmoAnim</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Library</OutputType>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <RootNamespace>LoadAmmoAnimMod</RootNamespace>
+        <AssemblyName>LoadAmmoAnimServer</AssemblyName>
+        <Version>$(ModVersion)</Version>
+        <Authors>Manimal</Authors>
+        <Company>Manimal</Company>
+        <Product>LoadAmmoAnim</Product>
+        <Description>Server-side mod that registers the hidden animation IFAK item for LoadAmmoAnim</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony" Version="2.3.6" />
-    <PackageReference Include="SPTarkov.Common" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.DI" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.13" />
-    <PackageReference Include="WTT-ServerCommonLib" Version="2.0.20" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Lib.Harmony" Version="2.3.6" />
+        <PackageReference Include="SPTarkov.Common" Version="4.1.0" />
+        <PackageReference Include="SPTarkov.DI" Version="4.1.0" />
+        <PackageReference Include="SPTarkov.Server.Core" Version="4.1.0" />
+        <PackageReference Include="WTT-ServerCommonLib" Version="3.0.6" />
+    </ItemGroup>
 
-  <!--
+    <!--
     Force the client to build before the server, so the unified release-zip target
     below can find the client DLL output. ReferenceOutputAssembly=false because we
     dont actually link against the client at runtime — its a different runtime
     (netstandard2.1 client vs net9.0 server) and a different process (BepInEx vs SPT).
     Were just leveraging MSBuild's project graph for build ordering.
   -->
-  <ItemGroup>
-    <ProjectReference Include="..\LoadAmmoAnimClient\LoadAmmoAnimClient.csproj" ReferenceOutputAssembly="false" Private="false" />
-    <!-- Fika compat client. ReferenceOutputAssembly=false because the server runtime
+    <ItemGroup>
+        <ProjectReference Include="..\LoadAmmoAnimClient\LoadAmmoAnimClient.csproj"
+            ReferenceOutputAssembly="false" Private="false" />
+        <!-- Fika compat client. ReferenceOutputAssembly=false because the server runtime
          doesnt link it; we just need build order so PackageFullRelease can pick up
          the compiled DLL. -->
-    <ProjectReference Include="..\LoadAmmoAnimClientFika\LoadAmmoAnimClientFika.csproj" ReferenceOutputAssembly="false" Private="false" />
-  </ItemGroup>
+        <ProjectReference Include="..\LoadAmmoAnimClientFika\LoadAmmoAnimClientFika.csproj"
+            ReferenceOutputAssembly="false" Private="false" />
+    </ItemGroup>
 
-  <!--
+    <!--
     Generate BuildInfo.g.cs from Directory.Build.props so ModMetadata can use
     BuildInfo.Version / BuildInfo.ModGuid as compile-time constants. update version
     in Directory.Build.props and the metadata follows automatically.
   -->
-  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
-    <PropertyGroup>
-      <BuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</BuildInfoFile>
-    </PropertyGroup>
-    <ItemGroup>
-      <_BuildInfoLines Remove="@(_BuildInfoLines)" />
-      <_BuildInfoLines Include="// auto-generated from Directory.Build.props — do not edit" />
-      <_BuildInfoLines Include="namespace $(RootNamespace)" />
-      <_BuildInfoLines Include="{" />
-      <_BuildInfoLines Include="    internal static class BuildInfo" />
-      <_BuildInfoLines Include="    {" />
-      <_BuildInfoLines Include="        public const string Version = %22$(ModVersion)%22%3B" />
-      <_BuildInfoLines Include="        public const string ModGuid = %22$(ModGuid)%22%3B" />
-      <_BuildInfoLines Include="    }" />
-      <_BuildInfoLines Include="}" />
-    </ItemGroup>
-    <WriteLinesToFile File="$(BuildInfoFile)" Lines="@(_BuildInfoLines)" Overwrite="true" WriteOnlyWhenDifferent="true" />
-    <ItemGroup>
-      <Compile Include="$(BuildInfoFile)" />
-    </ItemGroup>
-  </Target>
+    <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
+        <PropertyGroup>
+            <BuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</BuildInfoFile>
+        </PropertyGroup>
+        <ItemGroup>
+            <_BuildInfoLines Remove="@(_BuildInfoLines)" />
+            <_BuildInfoLines Include="// auto-generated from Directory.Build.props — do not edit" />
+            <_BuildInfoLines Include="namespace $(RootNamespace)" />
+            <_BuildInfoLines Include="{" />
+            <_BuildInfoLines Include="    internal static class BuildInfo" />
+            <_BuildInfoLines Include="    {" />
+            <_BuildInfoLines Include="        public const string Version = %22$(ModVersion)%22%3B" />
+            <_BuildInfoLines Include="        public const string ModGuid = %22$(ModGuid)%22%3B" />
+            <_BuildInfoLines Include="    }" />
+            <_BuildInfoLines Include="}" />
+        </ItemGroup>
+        <WriteLinesToFile File="$(BuildInfoFile)" Lines="@(_BuildInfoLines)" Overwrite="true"
+            WriteOnlyWhenDifferent="true" />
+        <ItemGroup>
+            <Compile Include="$(BuildInfoFile)" />
+        </ItemGroup>
+    </Target>
 
-  <!-- Copy DLL and all static mod files to the SPT dev install -->
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <PropertyGroup>
-      <DeployDir>D:\SPTDev\SPT\user\mods\LoadAmmoAnimServer</DeployDir>
-    </PropertyGroup>
-    <MakeDir Directories="$(DeployDir)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DeployDir)" />
-    <!-- Copy static mod files (bundles.json, db/) preserving directory structure -->
-    <ItemGroup>
-      <StaticModFiles Include="$(ProjectDir)..\ServerModFiles\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(StaticModFiles)" DestinationFiles="@(StaticModFiles->'$(DeployDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
-  </Target>
+    <!-- Copy DLL and all static mod files to the SPT dev install -->
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+        <PropertyGroup>
+            <DeployDir>..\..\SPT_runtime\user\mods\LoadAmmoAnimServer
+            </DeployDir>
+        </PropertyGroup>
+        <MakeDir Directories="$(DeployDir)" />
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DeployDir)" />
+        <!-- Copy static mod files (bundles.json, db/) preserving directory structure -->
+        <ItemGroup>
+            <StaticModFiles Include="$(ProjectDir)..\ServerModFiles\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(StaticModFiles)"
+            DestinationFiles="@(StaticModFiles->'$(DeployDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    </Target>
 
-  <Target Name="PackageModForDistribution" AfterTargets="Build">
-    <PropertyGroup>
-      <ModName>$(AssemblyName)</ModName>
-      <ZipFileName>$(ModName).zip</ZipFileName>
-      <TempPackageDir>$(ProjectDir)obj\Package</TempPackageDir>
-      <ModPackageDir>$(TempPackageDir)\SPT\user\mods\LoadAmmoAnimServer</ModPackageDir>
-    </PropertyGroup>
-    <Message Text="--- Starting Mod packaging for distribution ---" Importance="high" />
-    <RemoveDir Directories="$(TempPackageDir)" />
-    <MakeDir Directories="$(ModPackageDir)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModPackageDir)" />
-    <ItemGroup>
-      <StaticModFilesForZip Include="$(ProjectDir)..\ServerModFiles\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(StaticModFilesForZip)" DestinationFiles="@(StaticModFilesForZip->'$(ModPackageDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
-    <ZipDirectory SourceDirectory="$(TempPackageDir)" DestinationFile="$(ProjectDir)$(ZipFileName)" Overwrite="true" />
-    <RemoveDir Directories="$(TempPackageDir)" />
-    <Message Text="--- Mod successfully packaged at: $(ProjectDir)$(ZipFileName) ---" Importance="high" />
-  </Target>
+    <Target Name="PackageModForDistribution" AfterTargets="Build">
+        <PropertyGroup>
+            <ModName>$(AssemblyName)</ModName>
+            <ZipFileName>$(ModName).zip</ZipFileName>
+            <TempPackageDir>$(ProjectDir)obj\Package</TempPackageDir>
+            <ModPackageDir>$(TempPackageDir)\SPT_Runtime\user\mods\LoadAmmoAnimServer</ModPackageDir>
+        </PropertyGroup>
+        <Message Text="--- Starting Mod packaging for distribution ---" Importance="high" />
+        <RemoveDir Directories="$(TempPackageDir)" />
+        <MakeDir Directories="$(ModPackageDir)" />
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModPackageDir)" />
+        <ItemGroup>
+            <StaticModFilesForZip Include="$(ProjectDir)..\ServerModFiles\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(StaticModFilesForZip)"
+            DestinationFiles="@(StaticModFilesForZip->'$(ModPackageDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+        <ZipDirectory SourceDirectory="$(TempPackageDir)"
+            DestinationFile="$(ProjectDir)$(ZipFileName)" Overwrite="true" />
+        <RemoveDir Directories="$(TempPackageDir)" />
+        <Message Text="--- Mod successfully packaged at: $(ProjectDir)$(ZipFileName) ---"
+            Importance="high" />
+    </Target>
 
-  <!--
+    <!--
     Combined release zip for upload. Builds a single zip with the full SPT install
     layout — extract directly into the SPT root and you're done. Runs after the
     server's per-project package target above (so the server DLL is built) and after
@@ -109,47 +117,67 @@
     path the user already maintains. Falls back to a warning if its not found there —
     the rest of the package still gets built so iteration isnt blocked.
   -->
-  <Target Name="PackageFullRelease" AfterTargets="PackageModForDistribution">
-    <PropertyGroup>
-      <ReleaseStagingDir>$(ProjectDir)..\obj\ReleasePackage</ReleaseStagingDir>
-      <ReleaseZipPath>$(ProjectDir)..\LoadAmmoAnim-$(Version).zip</ReleaseZipPath>
-      <ClientDllPath>$(ProjectDir)..\LoadAmmoAnimClient\bin\$(Configuration)\netstandard2.1\LoadAmmoAnimClient.dll</ClientDllPath>
-      <FikaClientDllPath>$(ProjectDir)..\LoadAmmoAnimClientFika\bin\$(Configuration)\netstandard2.1\LoadAmmoAnimClientFika.dll</FikaClientDllPath>
-      <DeployedBundlePath>D:\SPTDev\SPT\user\mods\LoadAmmoAnimServer\bundles\manimal\stanags_container.bundle</DeployedBundlePath>
-    </PropertyGroup>
+    <Target Name="PackageFullRelease" AfterTargets="PackageModForDistribution">
+        <PropertyGroup>
+            <ReleaseStagingDir>$(ProjectDir)..\obj\ReleasePackage</ReleaseStagingDir>
+            <ReleaseZipPath>$(ProjectDir)..\LoadAmmoAnim-$(Version).zip</ReleaseZipPath>
+            <ClientDllPath>
+                $(ProjectDir)..\LoadAmmoAnimClient\bin\$(Configuration)\netstandard2.1\LoadAmmoAnimClient.dll</ClientDllPath>
+            <FikaClientDllPath>
+                $(ProjectDir)..\LoadAmmoAnimClientFika\bin\$(Configuration)\netstandard2.1\LoadAmmoAnimClientFika.dll</FikaClientDllPath>
+            <DeployedBundlePath>
+                ..\..\SPT_Runtime\user\mods\LoadAmmoAnimServer\bundles\manimal\stanags_container.bundle</DeployedBundlePath>
+        </PropertyGroup>
 
-    <Message Text="--- Building combined release zip at $(ReleaseZipPath) ---" Importance="high" />
+        <Message Text="--- Building combined release zip at $(ReleaseZipPath) ---" Importance="high" />
 
-    <RemoveDir Directories="$(ReleaseStagingDir)" />
-    <MakeDir Directories="$(ReleaseStagingDir)\BepInEx\plugins\LoadAmmoAnim" />
-    <MakeDir Directories="$(ReleaseStagingDir)\SPT\user\mods\LoadAmmoAnimServer" />
+        <RemoveDir Directories="$(ReleaseStagingDir)" />
+        <MakeDir Directories="$(ReleaseStagingDir)\BepInEx\plugins\LoadAmmoAnim" />
+        <MakeDir Directories="$(ReleaseStagingDir)\SPT_Runtime\user\mods\LoadAmmoAnimServer" />
 
-    <!-- Server DLL -->
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ReleaseStagingDir)\SPT\user\mods\LoadAmmoAnimServer" />
+        <!-- Server DLL -->
+        <Copy SourceFiles="$(TargetPath)"
+            DestinationFolder="$(ReleaseStagingDir)\SPT_Runtime\user\mods\LoadAmmoAnimServer" />
 
-    <!-- Client DLL — should always be there given the ProjectReference, but warn if not -->
-    <Warning Text="Client DLL missing at $(ClientDllPath) — release zip will not include the client" Condition="!Exists('$(ClientDllPath)')" />
-    <Copy SourceFiles="$(ClientDllPath)" DestinationFolder="$(ReleaseStagingDir)\BepInEx\plugins\LoadAmmoAnim" Condition="Exists('$(ClientDllPath)')" />
+        <!-- Client DLL — should always be there given the ProjectReference, but warn if not -->
+        <Warning
+            Text="Client DLL missing at $(ClientDllPath) — release zip will not include the client"
+            Condition="!Exists('$(ClientDllPath)')" />
+        <Copy SourceFiles="$(ClientDllPath)"
+            DestinationFolder="$(ReleaseStagingDir)\BepInEx\plugins\LoadAmmoAnim"
+            Condition="Exists('$(ClientDllPath)')" />
 
-    <!-- Fika compat DLL — sideloaded by the main client at Awake when Fika is detected.
+        <!-- Fika compat DLL — sideloaded by the main client at Awake when Fika is detected.
          shipping it unconditionally is fine since the loader gates on Chainloader.PluginInfos. -->
-    <Warning Text="Fika compat DLL missing at $(FikaClientDllPath) — release zip will not include Fika compat. Build LoadAmmoAnimClientFika to populate." Condition="!Exists('$(FikaClientDllPath)')" />
-    <Copy SourceFiles="$(FikaClientDllPath)" DestinationFolder="$(ReleaseStagingDir)\BepInEx\plugins\LoadAmmoAnim" Condition="Exists('$(FikaClientDllPath)')" />
+        <Warning
+            Text="Fika compat DLL missing at $(FikaClientDllPath) — release zip will not include Fika compat. Build LoadAmmoAnimClientFika to populate."
+            Condition="!Exists('$(FikaClientDllPath)')" />
+        <Copy SourceFiles="$(FikaClientDllPath)"
+            DestinationFolder="$(ReleaseStagingDir)\BepInEx\plugins\LoadAmmoAnim"
+            Condition="Exists('$(FikaClientDllPath)')" />
 
-    <!-- ServerModFiles (bundles.json, db/*.jsonc) -->
-    <ItemGroup>
-      <ReleaseStaticFiles Include="$(ProjectDir)..\ServerModFiles\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ReleaseStaticFiles)" DestinationFiles="@(ReleaseStaticFiles->'$(ReleaseStagingDir)\SPT\user\mods\LoadAmmoAnimServer\%(RecursiveDir)%(Filename)%(Extension)')" />
+        <!-- ServerModFiles (bundles.json, db/*.jsonc) -->
+        <ItemGroup>
+            <ReleaseStaticFiles Include="$(ProjectDir)..\ServerModFiles\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(ReleaseStaticFiles)"
+            DestinationFiles="@(ReleaseStaticFiles->'$(ReleaseStagingDir)\SPT_Runtime\user\mods\LoadAmmoAnimServer\%(RecursiveDir)%(Filename)%(Extension)')" />
 
-    <!-- Asset bundle from deployed install (not in repo) -->
-    <Warning Text="Bundle file missing at $(DeployedBundlePath) — release zip will not include the .bundle. Re-export from Unity or copy the bundle into your deployed install path before next packaging." Condition="!Exists('$(DeployedBundlePath)')" />
-    <MakeDir Directories="$(ReleaseStagingDir)\SPT\user\mods\LoadAmmoAnimServer\bundles\manimal" Condition="Exists('$(DeployedBundlePath)')" />
-    <Copy SourceFiles="$(DeployedBundlePath)" DestinationFolder="$(ReleaseStagingDir)\SPT\user\mods\LoadAmmoAnimServer\bundles\manimal" Condition="Exists('$(DeployedBundlePath)')" />
+        <!-- Asset bundle from deployed install (not in repo) -->
+        <Warning
+            Text="Bundle file missing at $(DeployedBundlePath) — release zip will not include the .bundle. Re-export from Unity or copy the bundle into your deployed install path before next packaging."
+            Condition="!Exists('$(DeployedBundlePath)')" />
+        <MakeDir
+            Directories="$(ReleaseStagingDir)\SPT_Runtime\user\mods\LoadAmmoAnimServer\bundles\manimal"
+            Condition="Exists('$(DeployedBundlePath)')" />
+        <Copy SourceFiles="$(DeployedBundlePath)"
+            DestinationFolder="$(ReleaseStagingDir)\SPT_Runtime\user\mods\LoadAmmoAnimServer\bundles\manimal"
+            Condition="Exists('$(DeployedBundlePath)')" />
 
-    <ZipDirectory SourceDirectory="$(ReleaseStagingDir)" DestinationFile="$(ReleaseZipPath)" Overwrite="true" />
-    <RemoveDir Directories="$(ReleaseStagingDir)" />
+        <ZipDirectory SourceDirectory="$(ReleaseStagingDir)" DestinationFile="$(ReleaseZipPath)"
+            Overwrite="true" />
+        <RemoveDir Directories="$(ReleaseStagingDir)" />
 
-    <Message Text="--- Release zip ready: $(ReleaseZipPath) ---" Importance="high" />
-  </Target>
+        <Message Text="--- Release zip ready: $(ReleaseZipPath) ---" Importance="high" />
+    </Target>
 </Project>

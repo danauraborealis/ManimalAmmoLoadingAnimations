@@ -6,7 +6,7 @@ using SPT.Reflection.Patching;
 
 namespace Manimal.LoadAmmoAnim.Patches
 {
-    // patches HandsControllerClass.method_49, the function that decides which
+    // patches EFT.NextObservedPlayer.ObservedPlayerHandsController.GetWeaponAnimationType, the function that decides which
     // PlayerAnimator.EWeaponAnimationType the held item uses. vanilla only knows
     // pistols, revolvers, knives, etc, and falls through to a default that
     // leaves the player animator in a bad state for us.
@@ -16,14 +16,14 @@ namespace Manimal.LoadAmmoAnim.Patches
     internal sealed class HandsControllerAnimationTypeBundlePatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod() =>
-            typeof(HandsControllerClass).GetMethod(
-                "method_49",
+            typeof(EFT.NextObservedPlayer.ObservedPlayerHandsController).GetMethod(
+                "GetWeaponAnimationType",
                 BindingFlags.Public | BindingFlags.Instance);
 
         [PatchPrefix]
         private static bool Prefix(
             ref PlayerAnimator.EWeaponAnimationType __result,
-            HandsControllerClass __instance)
+            EFT.NextObservedPlayer.ObservedPlayerHandsController __instance)
         {
             if (__instance.ItemInHands is LoadAmmoBundleItem)
             {

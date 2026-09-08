@@ -5,28 +5,29 @@ using SPTarkov.Server.Core.Models.Spt.Mod;
 
 namespace LoadAmmoAnimMod;
 
-public record ModMetadata : AbstractModMetadata
+public record ModMetadata : IModMetadata
 {
-    public override string ModGuid { get; init; } = BuildInfo.ModGuid;
-    public override string Name { get; init; } = "LoadAmmoAnim";
-    public override string Author { get; init; } = "Manimal";
-    public override List<string>? Contributors { get; init; }
-    public override SemanticVersioning.Version Version { get; init; } = new(BuildInfo.Version);
-    public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
-    public override List<string>? Incompatibilities { get; init; }
-    public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
-    public override string? Url { get; init; } = "";
-    public override bool? IsBundleMod { get; init; } = true;
-    public override string License { get; init; } = "MIT";
+    public string ModGuid { get; init; } = BuildInfo.ModGuid;
+    public string Name { get; init; } = "LoadAmmoAnim";
+    public string Author { get; init; } = "Manimal";
+    public List<string>? Contributors { get; init; }
+    public SemanticVersioning.Version Version { get; init; } = new(BuildInfo.Version);
+    public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
+    public List<string>? Incompatibilities { get; init; }
+    public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
+    public string? Url { get; init; } = "";
+    public bool? IsBundleMod { get; init; } = true;
+    public string License { get; init; } = "MIT";
+    public bool HasPrepatcher { get; init; } = false;
 }
 
-[Injectable(TypePriority = OnLoadOrder.PostDBModLoader + 2)]
+[Injectable(TypePriority = OnLoadOrder.Preload + 2)]
 #pragma warning disable CS0618
 public class LoadAmmoAnimServer(
     WTTServerCommonLib.WTTServerCommonLib wttCommon) : IOnLoad
 #pragma warning restore CS0618
 {
-    public async Task OnLoad()
+    public async Task OnLoadAsync(CancellationToken cancellationToken)
     {
         Assembly assembly = Assembly.GetExecutingAssembly();
 

@@ -4,7 +4,6 @@ using EFT;
 using Fika.Core.Main.Players;
 using Fika.Core.Networking;
 using Fika.Core.Networking.LiteNetLib;
-using Manimal.LoadAmmoAnim;
 using Manimal.LoadAmmoAnim.Fika.Packets;
 using Manimal.LoadAmmoAnim.Patches;
 using System;
@@ -49,7 +48,7 @@ namespace Manimal.LoadAmmoAnim.Fika
             // packets, never re-broadcast.
             LoadAmmoAnimEvents.AnimStarted += OnAnimStarted;
             LoadAmmoAnimEvents.AnimStopped += OnAnimStopped;
-            LoadAmmoAnimEvents.MagSwapped  += OnMagSwapped;
+            LoadAmmoAnimEvents.MagSwapped += OnMagSwapped;
 
             _log.LogInfo("[LoadAmmoAnim.Fika] enabled.");
         }

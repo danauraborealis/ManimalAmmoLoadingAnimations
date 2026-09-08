@@ -6,7 +6,7 @@ using SPT.Reflection.Patching;
 
 namespace Manimal.LoadAmmoAnim.Patches
 {
-    // patches GClass2970.smethod_0, the dispatcher that returns the GInterface323
+    // patches NextObservedPlayer.ObservedPlayerUsableItemController.GetObservedUsableItem, the dispatcher that returns the IObservedUsableItem
     // implementation for a given item type during the controller swap chain.
     // vanilla returns specific classes for radio transmitter and rangefinder,
     // otherwise null. returning null for our item silently breaks downstream
@@ -14,12 +14,12 @@ namespace Manimal.LoadAmmoAnim.Patches
     internal sealed class UsableBundleInterfaceDispatchPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod() =>
-            typeof(GClass2970).GetMethod(
-                "smethod_0",
+            typeof(EFT.NextObservedPlayer.ObservedPlayerUsableItemController).GetMethod(
+                "GetObservedUsableItem",
                 BindingFlags.Public | BindingFlags.Static);
 
         [PatchPrefix]
-        private static bool Prefix(ref GInterface323 __result, Item item)
+        private static bool Prefix(ref EFT.NextObservedPlayer.IObservedUsableItem __result, Item item)
         {
             if (item is LoadAmmoBundleItem)
             {

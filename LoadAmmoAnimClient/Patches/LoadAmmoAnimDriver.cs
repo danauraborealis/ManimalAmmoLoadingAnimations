@@ -212,6 +212,7 @@ namespace Manimal.LoadAmmoAnim.Patches
         private static void TryStart(Player player, LoadAmmoBundleItem bundleItem)
         {
             var session = LoadAmmoAnimState.Get(player);
+            if (player.HandsController == null) return;
             session.IsOurAnimation = true;
 
             try { player.StopBlindFire(); } catch { }
@@ -257,6 +258,7 @@ namespace Manimal.LoadAmmoAnim.Patches
                 {
                     Plugin.LogSource?.LogError("[LoadAmmoAnim] smethod_1 returned null controller.");
                     session.IsOurAnimation = false;
+                    RestoreHands(player, null);
                     return;
                 }
 
@@ -284,6 +286,7 @@ namespace Manimal.LoadAmmoAnim.Patches
                 Plugin.LogSource?.LogError(
                     $"[LoadAmmoAnim] CreateAndSpawnBundleController threw: {ex.GetType().Name}: {ex.Message}");
                 session.IsOurAnimation = false;
+                RestoreHands(player, player.HandsController as LoadAmmoBundleController);
             }
         }
 
@@ -422,7 +425,15 @@ namespace Manimal.LoadAmmoAnim.Patches
 
             if (player == null) yield break;
 
-            if (player.HandsController is LoadAmmoBundleController)
+            RestoreHands(player, controller);
+        }
+
+        private static void RestoreHands(Player player, LoadAmmoBundleController owner)
+        {
+            var hands = player.HandsController;
+            if (hands != null && hands != owner) return;
+
+            if (hands != null)
             {
                 try { player.DestroyController(); }
                 catch (Exception ex)
@@ -432,8 +443,7 @@ namespace Manimal.LoadAmmoAnim.Patches
                 }
             }
 
-            if (!(player.HandsController is Player.FirearmController))
-                player.TrySetLastEquippedWeapon(true, null);
+            player.TrySetLastEquippedWeapon(true, null);
         }
 
         // entry point for the Fika compat layer to start the anim on a remote
@@ -736,5 +746,15 @@ namespace Manimal.LoadAmmoAnim.Patches
                 return false;
             return true;
         }
+    }
+
+    public class FovCoroutineNullGuardPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod() =>
+            AccessTools.Method(typeof(EFT.Animations.ProceduralWeaponAnimation), "StartFovCoroutine");
+
+        [PatchPrefix]
+        public static bool Prefix(Player player) =>
+            player.HandsController != null && player.HandsController.HandsHierarchy != null;
     }
 }

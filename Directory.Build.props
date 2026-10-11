@@ -5,7 +5,7 @@
     csproj Version, release zip filename) refreshes on next build.
   -->
   <PropertyGroup>
-    <ModVersion>2.0.0</ModVersion>
+    <ModVersion>2.0.1</ModVersion>
     <ModSptVersion>~4.1.5</ModSptVersion>
     <ModGuid>com.manimal.loadammoanim</ModGuid>
     <!-- custom item parent id. matches [CustomParent] on LoadAmmoBundleItem and the

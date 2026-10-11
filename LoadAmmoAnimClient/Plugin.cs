@@ -54,6 +54,7 @@ namespace Manimal.LoadAmmoAnim
             // for those frames.
             new ProcessEffectorsNullGuardPatch().Enable();
             new VisualPassNullGuardPatch().Enable();
+            new FovCoroutineNullGuardPatch().Enable();
 
             if (ContinuousLoadAmmoCompat.IsInstalled)
                 ContinuousLoadAmmoCompat.EnablePatches();

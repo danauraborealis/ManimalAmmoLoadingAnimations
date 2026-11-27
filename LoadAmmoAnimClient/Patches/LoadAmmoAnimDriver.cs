@@ -74,6 +74,12 @@ namespace Manimal.LoadAmmoAnim.Patches
         // returns to pool clean.
         public MeshRenderer ActiveRenderer;
 
+        // the stack of ammo being loaded from, for the round shown in the hand.
+        public Ammo CurrentAmmo;
+
+        // set when the real magazine model is in use instead of a baked mesh.
+        public LiveMagVisual Live;
+
         public bool IsLoading => LoadingCount > 0;
     }
 
@@ -153,7 +159,7 @@ namespace Manimal.LoadAmmoAnim.Patches
 
         // length of the bundle's draw clip. LoadMagazineDrawDelayPatch pads the
         // first-bullet wait by this, scaled to the actual playback speed.
-        internal const float DrawClipSeconds = 0.867f;
+        internal const float DrawClipSeconds = 0.667f;
 
         // ceiling on the put-away wait. clip is roughly 1s.
         private const float PutAwayMaxWaitSeconds = 1.5f;
@@ -355,12 +361,25 @@ namespace Manimal.LoadAmmoAnim.Patches
 
             string targetMesh = MagAnimLookup.GetMeshName(session.CurrentMagTemplateId);
 
+            // a chained magazine can belong to another family: the draw that follows has to be its own
+            if (session.ActiveController != null)
+                session.ActiveController.Family = MagAnimLookup.GetFamily(session.CurrentMagTemplateId);
+
             var prefabRoot = session.ActiveController?.ControllerGameObject;
             if (prefabRoot == null)
             {
                 Plugin.LogSource?.LogWarning(
                     "[LoadAmmoAnim] ApplyMeshSelection: ControllerGameObject is null. is the bundle loaded?");
                 return;
+            }
+
+            // observed players have no magazine item on this client, they keep the baked mesh.
+            if (Plugin.UseRealModels.Value && session.CurrentMag != null)
+            {
+                session.Live = LiveMagVisual.TryAttach(
+                    prefabRoot, player, session.CurrentMag, session.CurrentAmmo,
+                    session.ActiveController.BundleAnimator, session.ActiveController.Family);
+                if (session.Live) return;
             }
 
             foreach (var mr in prefabRoot.GetComponentsInChildren<MeshRenderer>(true))
@@ -375,15 +394,41 @@ namespace Manimal.LoadAmmoAnim.Patches
                 $"[LoadAmmoAnim] couldn't find mesh '{targetMesh}' under ControllerGameObject.");
         }
 
-        // immediate teardown. used when bailing without animating.
-        public static void StopAnimationInstantly(Player player)
+        // drops whichever magazine visual this session put up.
+        private static void ClearMagVisual(PlayerSession session)
         {
-            var session = LoadAmmoAnimState.TryGet(player);
-            if (session?.ActiveRenderer != null)
+            if (session == null) return;
+            if (session.Live)
+            {
+                session.Live.Detach();
+                session.Live = null;
+            }
+            if (session.ActiveRenderer != null)
             {
                 session.ActiveRenderer.enabled = false;
                 session.ActiveRenderer = null;
             }
+        }
+
+        // the game can finish loading a round before the hands have pushed it in. cutting to the
+        // put-away there skips it, so when one is still on its way (or the mag just filled) the loop
+        // in progress plays to its end first. a plain cancel doesnt wait.
+        private static IEnumerator FinishRound(PlayerSession session, LoadAmmoBundleController controller, bool magFull)
+        {
+            var live = session.Live;
+            if (!live || !(magFull || !live.CaughtUp)) yield break;
+
+            float deadline = Time.unscaledTime + session.LoadOneAmmoSpeed * 1.5f;
+            while (controller && live && session.Live == live && Time.unscaledTime < deadline
+                   && !(live.CaughtUp && live.AtLoopStart))
+                yield return null;
+        }
+
+        // immediate teardown. used when bailing without animating.
+        public static void StopAnimationInstantly(Player player)
+        {
+            var session = LoadAmmoAnimState.TryGet(player);
+            ClearMagVisual(session);
             if (player?.HandsController is LoadAmmoBundleController)
             {
                 try { player.DestroyController(); }
@@ -414,11 +459,7 @@ namespace Manimal.LoadAmmoAnim.Patches
             }
 
             var session = LoadAmmoAnimState.TryGet(player);
-            if (session?.ActiveRenderer != null)
-            {
-                session.ActiveRenderer.enabled = false;
-                session.ActiveRenderer = null;
-            }
+            ClearMagVisual(session);
 
             if (player == null) yield break;
 
@@ -503,11 +544,7 @@ namespace Manimal.LoadAmmoAnim.Patches
             }
 
             var session = LoadAmmoAnimState.TryGet(player);
-            if (session?.ActiveRenderer != null)
-            {
-                session.ActiveRenderer.enabled = false;
-                session.ActiveRenderer = null;
-            }
+            ClearMagVisual(session);
             ApplyMeshSelection(player);
 
             controller.PlayDraw();
@@ -531,10 +568,18 @@ namespace Manimal.LoadAmmoAnim.Patches
                 if (!session.IsOurAnimation || controller == null)
                     break;
 
+                controller.KeepInFamily();
+
                 if (!session.IsLoading)
                 {
+                    bool filled = sessionMag != null && sessionMag.Count >= sessionMag.MaxCount;
+
                     if (!claInstalled)
                     {
+                        var finish = FinishRound(session, controller, filled);
+                        while (finish.MoveNext()) yield return null;
+                        if (session.IsLoading) continue;
+
                         // always run put-away + destroy + re-equip, regardless of
                         // inventory state. instant-teardown leaves PWA stale.
                         session.IsOurAnimation = false;
@@ -547,6 +592,10 @@ namespace Manimal.LoadAmmoAnim.Patches
                     if (idleSince < 0f) idleSince = Time.realtimeSinceStartup;
                     if (Time.realtimeSinceStartup - idleSince >= ClaStopTimeoutSeconds)
                     {
+                        var finish = FinishRound(session, controller, filled);
+                        while (finish.MoveNext()) yield return null;
+                        if (session.IsLoading) continue;
+
                         session.IsOurAnimation = false;
                         LoadAmmoAnimEvents.RaiseStopped(player, true);
                         if (player != null)
@@ -561,6 +610,9 @@ namespace Manimal.LoadAmmoAnim.Patches
 
                 if (sessionMag != null && sessionMag.Count >= sessionMag.MaxCount)
                 {
+                    var finishFull = FinishRound(session, controller, true);
+                    while (finishFull.MoveNext()) yield return null;
+
                     bool nextMagAlreadyLoading = session.CurrentMag != null
                                                  && session.CurrentMag != sessionMag;
 
@@ -579,11 +631,7 @@ namespace Manimal.LoadAmmoAnim.Patches
                             yield return null;
                         }
 
-                        if (session.ActiveRenderer != null)
-                        {
-                            session.ActiveRenderer.enabled = false;
-                            session.ActiveRenderer = null;
-                        }
+                        ClearMagVisual(session);
                         ApplyMeshSelection(player);
                         sessionMag = session.CurrentMag;
                         LoadAmmoAnimEvents.RaiseMagSwapped(player, session.CurrentMagTemplateId);
@@ -630,6 +678,7 @@ namespace Manimal.LoadAmmoAnim.Patches
             var mag = __instance._magazine;
             session.CurrentMagTemplateId = mag?.TemplateId;
             session.CurrentMag = mag;
+            session.CurrentAmmo = __instance._sourceAmmo;
 
             LoadAmmoAnimState.OnLoadingStarted(player);
         }

@@ -36,6 +36,14 @@ namespace Manimal.LoadAmmoAnim
 
         private const string FallbackMesh = "stanag_MESH";
 
+        // which clip set a magazine loads with. the table is in MagAnimFamilies.cs.
+        public static MagAnimFamily GetFamily(string templateId)
+        {
+            if (templateId != null && MagAnimFamily.ByTemplate.TryGetValue(templateId, out var family))
+                return family;
+            return MagAnimFamily.Stanag556;
+        }
+
         // every mesh name the bundle has. ApplyMeshSelection uses this so we only
         // toggle our own mag meshes, and leave the hand/arm renderers alone.
         public static readonly HashSet<string> AllMeshNames =

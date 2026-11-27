@@ -1,5 +1,6 @@
 using BepInEx;
 using BepInEx.Bootstrap;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using Manimal.LoadAmmoAnim.Patches;
 using System;
@@ -28,10 +29,13 @@ namespace Manimal.LoadAmmoAnim
         private const string FikaCompatTypeName = "Manimal.LoadAmmoAnim.Fika.FikaCompatModule";
 
         public static ManualLogSource LogSource;
+        public static ConfigEntry<bool> UseRealModels;
 
         private void Awake()
         {
             LogSource = Logger;
+            UseRealModels = Config.Bind("General", "Use real magazine and round models", true,
+                "Show the magazine being loaded and its rounds with the game's own models. Off: the mesh baked into the bundle.");
             LogSource.LogInfo("LoadAmmoAnim loaded!");
 
             // LoadMagazineProcess hooks — detect mag-loading sessions + extend the first-bullet

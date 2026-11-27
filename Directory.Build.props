@@ -5,7 +5,7 @@
     csproj Version, release zip filename) refreshes on next build.
   -->
   <PropertyGroup>
-    <ModVersion>2.0.0</ModVersion>
+    <ModVersion>3.0.0</ModVersion>
     <ModSptVersion>~4.1.5</ModSptVersion>
     <ModGuid>com.manimal.loadammoanim</ModGuid>
     <!-- custom item parent id. matches [CustomParent] on LoadAmmoBundleItem and the
@@ -20,5 +20,10 @@
     <SptRoot Condition="'$(SptRoot)' == ''">D:\SPT41Dev</SptRoot>
     <FikaSptRoot Condition="'$(FikaSptRoot)' == ''">D:\SPT41DevFika</FikaSptRoot>
     <SptServerDir>$(SptRoot)\SPT_Runtime</SptServerDir>
+  </PropertyGroup>
+
+  <!-- keeps the local checkout path (pdb path) out of the shipped dlls -->
+  <PropertyGroup>
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
   </PropertyGroup>
 </Project>

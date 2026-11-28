@@ -22,11 +22,15 @@ namespace Manimal.LoadAmmoAnim
     // skipping the compat patches and breaking chained-mag loading.
     [BepInDependency("com.ozen.continuousloadammo", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(FikaHeadlessGuid, BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         private const string FikaGuid = "com.fika.core";
+        private const string FikaHeadlessGuid = "com.fika.headless";
         private const string FikaCompatAssemblyFileName = "LoadAmmoAnimClientFika.dll";
         private const string FikaCompatTypeName = "Manimal.LoadAmmoAnim.Fika.FikaCompatModule";
+
+        public static bool IsHeadless => Chainloader.PluginInfos.ContainsKey(FikaHeadlessGuid);
 
         public static ManualLogSource LogSource;
         public static ConfigEntry<bool> UseRealModels;
@@ -37,6 +41,14 @@ namespace Manimal.LoadAmmoAnim
             UseRealModels = Config.Bind("General", "Use real magazine and round models", true,
                 "Show the magazine being loaded and its rounds with the game's own models. Off: the mesh baked into the bundle.");
             LogSource.LogInfo("LoadAmmoAnim loaded!");
+
+            if (IsHeadless)
+            {
+                LogSource.LogInfo("[LoadAmmoAnim] headless host: item type and packet handlers only.");
+                if (Chainloader.PluginInfos.ContainsKey(FikaGuid))
+                    LoadFikaCompat();
+                return;
+            }
 
             // LoadMagazineProcess hooks — detect mag-loading sessions + extend the first-bullet
             // delay to fit the bundle's draw clip. driver-side, unrelated to controller dispatch.

@@ -134,6 +134,40 @@ namespace Manimal.LoadAmmoAnim.Patches
             }
         }
 
+        public static void RemoveDestroyed()
+        {
+            foreach (var player in new List<Player>(_sessions.Keys))
+                if (player == null) _sessions.Remove(player);
+        }
+
+        public static void BeginLoad(
+            InventoryController owner, Magazine mag, Ammo sourceAmmo, float secondsPerRound)
+        {
+            var player = LocalOwner(owner);
+            if (player == null) return;
+            var session = Get(player);
+
+            if (secondsPerRound > 0f) session.LoadOneAmmoSpeed = secondsPerRound;
+            session.CurrentMagTemplateId = mag?.TemplateId;
+            session.CurrentMag = mag;
+            session.CurrentAmmo = sourceAmmo;
+
+            OnLoadingStarted(player);
+        }
+
+        public static void TrackLoadEnd(InventoryController owner, Task<IResult> process)
+        {
+            var player = LocalOwner(owner);
+            if (player == null) return;
+            process?.ContinueWith(_ => OnLoadingEnded(player));
+        }
+
+        private static Player LocalOwner(InventoryController owner)
+        {
+            var player = Singleton<GameWorld>.Instance?.MainPlayer;
+            return player != null && player.InventoryController == owner ? player : null;
+        }
+
         public static void OnLoadingEnded(Player player)
         {
             var s = TryGet(player);
@@ -665,33 +699,17 @@ namespace Manimal.LoadAmmoAnim.Patches
                 nameof(Player.PlayerInventoryController.LoadMagazineProcess.Start));
 
         [PatchPrefix]
-        private static void Prefix(Player.PlayerInventoryController.LoadMagazineProcess __instance)
-        {
-            var player = Singleton<GameWorld>.Instance?.MainPlayer;
-            if (player == null) return;
-            var session = LoadAmmoAnimState.Get(player);
+        private static void Prefix(Player.PlayerInventoryController.LoadMagazineProcess __instance) =>
+            LoadAmmoAnimState.BeginLoad(
+                __instance._inventoryController, __instance._magazine,
+                __instance._sourceAmmo, __instance._loadOneAmmoSpeed);
 
-            // seconds per round at the player's current skill level.
-            float speed = __instance._loadOneAmmoSpeed;
-            if (speed > 0f) session.LoadOneAmmoSpeed = speed;
-
-            var mag = __instance._magazine;
-            session.CurrentMagTemplateId = mag?.TemplateId;
-            session.CurrentMag = mag;
-            session.CurrentAmmo = __instance._sourceAmmo;
-
-            LoadAmmoAnimState.OnLoadingStarted(player);
-        }
-
+        // Start returns a Task that resolves when the session ends. hook the
+        // continuation so LoadingCount decrements no matter how it ends.
         [PatchPostfix]
-        private static void Postfix(Task<IResult> __result)
-        {
-            var player = Singleton<GameWorld>.Instance?.MainPlayer;
-            if (player == null) return;
-            // Start returns a Task that resolves when the session ends. hook the
-            // continuation so LoadingCount decrements no matter how it ends.
-            __result?.ContinueWith(_ => LoadAmmoAnimState.OnLoadingEnded(player));
-        }
+        private static void Postfix(
+            Player.PlayerInventoryController.LoadMagazineProcess __instance, Task<IResult> __result) =>
+            LoadAmmoAnimState.TrackLoadEnd(__instance._inventoryController, __result);
     }
 
     // method_5 on LoadMagazineProcess is the per-bullet wait. on the first bullet of a
@@ -706,7 +724,7 @@ namespace Manimal.LoadAmmoAnim.Patches
         public static bool Prefix(Player.PlayerInventoryController.LoadMagazineProcess __instance, ref Task __result)
         {
             var player = Singleton<GameWorld>.Instance?.MainPlayer;
-            if (player == null) return true;
+            if (player == null || player.InventoryController != __instance._inventoryController) return true;
             var session = LoadAmmoAnimState.TryGet(player);
             if (session == null) return true;
 
@@ -746,6 +764,7 @@ namespace Manimal.LoadAmmoAnim.Patches
         [PatchPostfix]
         public static void Postfix()
         {
+            LoadAmmoAnimState.RemoveDestroyed();
             var player = Singleton<GameWorld>.Instance?.MainPlayer;
             if (player != null)
                 player.StartCoroutine(LoadAmmoAnimDriver.WarmBundleAsync());

@@ -1,13 +1,20 @@
 using BepInEx.Logging;
 using Comfort.Common;
 using EFT;
+using EFT.InventoryLogic;
+using Fika.Core.Main.BaseClasses;
 using Fika.Core.Main.Players;
+using Fika.Core.Modding;
+using Fika.Core.Modding.Events;
 using Fika.Core.Networking;
 using Fika.Core.Networking.LiteNetLib;
+using Fika.Core.Networking.LiteNetLib.Utils;
+using HarmonyLib;
 using Manimal.LoadAmmoAnim;
 using Manimal.LoadAmmoAnim.Fika.Packets;
 using Manimal.LoadAmmoAnim.Patches;
 using System;
+using System.Threading.Tasks;
 
 namespace Manimal.LoadAmmoAnim.Fika
 {
@@ -19,28 +26,28 @@ namespace Manimal.LoadAmmoAnim.Fika
         // separate logger so Fika-related lines are easy to grep in BepInEx.log.
         private static ManualLogSource _log;
 
-        // captured at Enable. used both to send and to register receivers.
-        private static IFikaNetworkManager _netManager;
-
         public static void Enable()
         {
             _log = BepInEx.Logging.Logger.CreateLogSource("LoadAmmoAnim.Fika");
 
-            _netManager = Singleton<IFikaNetworkManager>.Instance;
-            if (_netManager == null)
+            FikaEventDispatcher.SubscribeEvent<FikaNetworkManagerCreatedEvent>(OnNetworkManagerCreated);
+
+            if (Plugin.IsHeadless)
             {
-                // Fika initializes its network manager later than our Awake. defer
-                // registration to the first packet event we observe. for v1 we just
-                // bail and warn — the user can reload the mod after raid join if
-                // its actually missing.
-                _log.LogWarning(
-                    "[LoadAmmoAnim.Fika] IFikaNetworkManager singleton not ready at Enable. " +
-                    "we'll lazily resolve on first send. receive registration will be skipped — " +
-                    "if observed-player anims dont play, restart the raid.");
+                _log.LogInfo("[LoadAmmoAnim.Fika] enabled (headless, receive only).");
+                return;
             }
-            else
+
+            try
             {
-                RegisterReceivers(_netManager);
+                new Harmony(BuildInfo.ModGuid + ".fika").Patch(
+                    AccessTools.Method(AccessTools.Inner(typeof(BaseInventoryController), "CustomAmmoLoader"), "Start"),
+                    prefix: new HarmonyMethod(typeof(FikaCompatModule), nameof(FastLoadPrefix)),
+                    postfix: new HarmonyMethod(typeof(FikaCompatModule), nameof(FastLoadPostfix)));
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning($"[LoadAmmoAnim.Fika] fast load will not animate: {ex.Message}");
             }
 
             // subscribe to driver events for the local-player session lifecycle.
@@ -54,21 +61,34 @@ namespace Manimal.LoadAmmoAnim.Fika
             _log.LogInfo("[LoadAmmoAnim.Fika] enabled.");
         }
 
-        private static void RegisterReceivers(IFikaNetworkManager net)
+        private static void OnNetworkManagerCreated(FikaNetworkManagerCreatedEvent created)
         {
+            var net = created.Manager;
             net.RegisterPacket<LoadAmmoBundleStartPacket>(OnStartPacket);
             net.RegisterPacket<LoadAmmoBundleStopPacket>(OnStopPacket);
             net.RegisterPacket<LoadAmmoBundleSwapMeshPacket>(OnSwapMeshPacket);
         }
 
+        // Fika's fast load runs a private loader instead of LoadMagazineProcess. it loads several
+        // rounds per tick, and _baseLoadSpeed is the seconds per tick.
+        private static void FastLoadPrefix(
+            InventoryController ____inventoryController, Magazine ____magazine,
+            Ammo ____sourceAmmo, float ____baseLoadSpeed) =>
+            LoadAmmoAnimState.BeginLoad(____inventoryController, ____magazine, ____sourceAmmo, ____baseLoadSpeed);
+
+        private static void FastLoadPostfix(InventoryController ____inventoryController, Task<IResult> __result) =>
+            LoadAmmoAnimState.TrackLoadEnd(____inventoryController, __result);
+
         // ---- send side ----
 
-        private static IFikaNetworkManager EnsureNetManager()
+        private static void Broadcast<T>(ref T packet) where T : INetSerializable
         {
-            if (_netManager != null) return _netManager;
-            _netManager = Singleton<IFikaNetworkManager>.Instance;
-            if (_netManager != null) RegisterReceivers(_netManager);
-            return _netManager;
+            if (!Singleton<IFikaNetworkManager>.Instantiated)
+            {
+                _log?.LogWarning($"[LoadAmmoAnim.Fika] cant send {typeof(T).Name}: no network manager.");
+                return;
+            }
+            Singleton<IFikaNetworkManager>.Instance.SendData(ref packet, DeliveryMethod.ReliableOrdered, broadcast: true);
         }
 
         private static FikaPlayer AsLocalFikaPlayer(Player p)
@@ -84,8 +104,6 @@ namespace Manimal.LoadAmmoAnim.Fika
         {
             var fp = AsLocalFikaPlayer(player);
             if (fp == null) return;
-            var net = EnsureNetManager();
-            if (net == null) { _log?.LogWarning("[LoadAmmoAnim.Fika] cant send Start: no network manager."); return; }
 
             var pkt = new LoadAmmoBundleStartPacket
             {
@@ -93,37 +111,33 @@ namespace Manimal.LoadAmmoAnim.Fika
                 MagTemplateId = magTpl ?? string.Empty,
                 LoadOneAmmoSpeed = speed
             };
-            net.SendData(ref pkt, DeliveryMethod.ReliableOrdered, broadcast: true);
+            Broadcast(ref pkt);
         }
 
         private static void OnAnimStopped(Player player, bool playPutAway)
         {
             var fp = AsLocalFikaPlayer(player);
             if (fp == null) return;
-            var net = EnsureNetManager();
-            if (net == null) { _log?.LogWarning("[LoadAmmoAnim.Fika] cant send Stop: no network manager."); return; }
 
             var pkt = new LoadAmmoBundleStopPacket
             {
                 NetId = fp.NetId,
                 PlayPutAway = playPutAway
             };
-            net.SendData(ref pkt, DeliveryMethod.ReliableOrdered, broadcast: true);
+            Broadcast(ref pkt);
         }
 
         private static void OnMagSwapped(Player player, string magTpl)
         {
             var fp = AsLocalFikaPlayer(player);
             if (fp == null) return;
-            var net = EnsureNetManager();
-            if (net == null) { _log?.LogWarning("[LoadAmmoAnim.Fika] cant send SwapMesh: no network manager."); return; }
 
             var pkt = new LoadAmmoBundleSwapMeshPacket
             {
                 NetId = fp.NetId,
                 NewMagTemplateId = magTpl ?? string.Empty
             };
-            net.SendData(ref pkt, DeliveryMethod.ReliableOrdered, broadcast: true);
+            Broadcast(ref pkt);
         }
 
         // ---- receive side ----
@@ -165,6 +179,7 @@ namespace Manimal.LoadAmmoAnim.Fika
 
         private static void OnStartPacket(LoadAmmoBundleStartPacket pkt)
         {
+            if (Plugin.IsHeadless) return;
             try
             {
                 var player = ResolvePlayerByNetId(pkt.NetId);
@@ -183,6 +198,7 @@ namespace Manimal.LoadAmmoAnim.Fika
 
         private static void OnStopPacket(LoadAmmoBundleStopPacket pkt)
         {
+            if (Plugin.IsHeadless) return;
             try
             {
                 var player = ResolvePlayerByNetId(pkt.NetId);
@@ -201,6 +217,7 @@ namespace Manimal.LoadAmmoAnim.Fika
 
         private static void OnSwapMeshPacket(LoadAmmoBundleSwapMeshPacket pkt)
         {
+            if (Plugin.IsHeadless) return;
             try
             {
                 var player = ResolvePlayerByNetId(pkt.NetId);
